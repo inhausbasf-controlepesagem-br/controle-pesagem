@@ -760,7 +760,16 @@ async function gerarExcelComFiltros(dataFiltro, loteFiltro, embalagem) {
   for (const r of registros) {
     // Para linhas além da primeira, copia a linha-base do template para manter fórmulas/estilos
     if (linha > linhaBase) {
-      rangeBase.copyTo(sheet.range(`A${linha}:H${linha}`));
+      const dest = sheet.range(`A${linha}:H${linha}`);
+      if (typeof rangeBase.copyTo === "function") {
+        rangeBase.copyTo(dest);
+      } else if (typeof rangeBase.copy === "function") {
+        rangeBase.copy(dest);
+      } else {
+        // Fallback: copia apenas fórmulas/valores (estilos podem variar conforme versão)
+        dest.formula(rangeBase.formula());
+        dest.value(rangeBase.value());
+      }
     }
 
     // Preenche apenas os valores variáveis
