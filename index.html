@@ -527,14 +527,38 @@ async function gerarExcelComFiltros(dataFiltro, loteFiltro, embalagem) {
 
   // Linha base do template (onde já existem fórmulas/formatos)
   const linhaBase = 6;
-  const rangeBase = sheet.range(`A${linhaBase}:H${linhaBase}`);
 
-  let linha = linhaBase;
+// Copia uma linha "modelo" (estilo + fórmulas + valores) para outra linha.
+// Isso preserva a estrutura do template sem depender de métodos não suportados no build do XlsxPopulate.
+function copiarLinhaTemplate(sheet, linhaOrigem, linhaDestino) {
+  const cols = ["A","B","C","D","E","F","G","H"];
+
+  // Copiar altura da linha (se existir no template)
+  try {
+    const h = sheet.row(linhaOrigem).height();
+    if (h) sheet.row(linhaDestino).height(h);
+  } catch (_) {}
+
+  cols.forEach(col => {
+    const src = sheet.cell(`${col}${linhaOrigem}`);
+    const dst = sheet.cell(`${col}${linhaDestino}`);
+
+    // Copia estilo
+    try { dst.style(src.style()); } catch (_) {}
+
+    // Copia fórmula ou valor
+    const f = src.formula();
+    if (f) dst.formula(f);
+    else dst.value(src.value());
+  });
+}
+
+let linha = linhaBase;
 
   for (const r of registros) {
     // Para linhas além da primeira, copia a linha-base do template para manter fórmulas/estilos
     if (linha > linhaBase) {
-      rangeBase.copyTo(sheet.range(`A${linha}:H${linha}`));
+      copiarLinhaTemplate(sheet, linhaBase, linha);
     }
 
     // Preenche apenas os valores variáveis
