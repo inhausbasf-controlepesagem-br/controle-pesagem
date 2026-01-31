@@ -762,13 +762,32 @@ async function gerarExcelComFiltros(dataFiltro, loteFiltro, embalagem) {
     if (linha > linhaBase) {
       const dest = sheet.range(`A${linha}:H${linha}`);
       if (typeof rangeBase.copyTo === "function") {
+        // Algumas versões do xlsx-populate no browser não suportam copyTo()
         rangeBase.copyTo(dest);
       } else if (typeof rangeBase.copy === "function") {
+        // Outras versões suportam copy()
         rangeBase.copy(dest);
       } else {
-        // Fallback: copia apenas fórmulas/valores (estilos podem variar conforme versão)
-        dest.formula(rangeBase.formula());
-        dest.value(rangeBase.value());
+        // Fallback robusto: copia célula a célula (fórmula/valor + estilo)
+        for (let c = 1; c <= 8; c++) {
+          const baseCell = sheet.cell(linhaBase, c);
+          const newCell  = sheet.cell(linha, c);
+
+          try {
+            const f = baseCell.formula();
+            if (f) newCell.formula(f);
+            else newCell.value(baseCell.value());
+          } catch (e) {
+            // Se der erro na fórmula, copia só o valor
+            newCell.value(baseCell.value());
+          }
+
+          try {
+            newCell.style(baseCell.style());
+          } catch (e) {
+            // Algumas builds do browser podem limitar estilos; ignora se falhar
+          }
+        }
       }
     }
 
