@@ -314,7 +314,7 @@ th {
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-populate/browser/xlsx-populate.min.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import {
@@ -499,62 +499,64 @@ async function gerarExcelComFiltros(dataFiltro, loteFiltro, embalagem) {
     throw new Error("Nenhum registro encontrado para os filtros informados.");
   }
 
-  // Carrega o template (deve estar no mesmo nível do index.html no GitHub)
-  const response = await fetch("PLANILHA.xlsx", { cache: "no-store" });
-  if (!response.ok) throw new Error("Não encontrei o arquivo PLANILHA.xlsx no site.");
-  const arrayBuffer = await response.arrayBuffer();
-
-  const workbook = XLSX.read(arrayBuffer, { type: "array" });
-  const sheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[sheetName];
-
-  // Cabeçalho conforme o seu template
-  sheet["B4"] = { t: "s", v: loteFiltro };      // LOTE
-  sheet["E3"] = { t: "s", v: dataFiltro };      // INÍCIO
-  sheet["G3"] = { t: "s", v: codigoEmbalagem }; // EMBALAG.
-
-  // Ordena por BAG para ficar organizado
+  // Organiza por BAG
   const registros = [];
   snapshot.forEach(d => registros.push(d.data()));
   registros.sort((a, b) => Number(a.bag) - Number(b.bag));
 
-  // Primeira linha de dados (template)
-  let linha = 6;
+  // Carrega o template preservando estilos/formatos
+  const response = await fetch("PLANILHA.xlsx", { cache: "no-store" });
+  if (!response.ok) throw new Error("Não encontrei o arquivo PLANILHA.xlsx no site.");
+  const arrayBuffer = await response.arrayBuffer();
 
-  // MATERIAL mantém fórmula (depende de $G$3)
-  const formulaMaterial = 'IFS($G$3="#1311","50825434",$G$3="#4704","50737403")';
+  const wb = await XlsxPopulate.fromDataAsync(arrayBuffer);
 
-  // G/H derivados de E (ajuste se seu template mudar)
-  const formulaLiquido = (l) => `IFERROR(IF(E${l}>0,E${l}-3.5,"-"),-3.5)`;
+  // Tenta pegar a aba "PESAGEM"; se não existir, usa a primeira
+  let sheet = wb.sheet("PESAGEM");
+  if (!sheet) sheet = wb.sheet(0);
+
+  // Cabeçalho conforme o template
+  sheet.cell("B4").value(loteFiltro); // LOTE
+
+  // INÍCIO como data real (mantém formato da célula do template)
+  const [yyyy, mm, dd] = dataFiltro.split("-").map(Number);
+  sheet.cell("E3").value(new Date(yyyy, mm - 1, dd));
+
+  // EMBALAG. (#4704 / #1311)
+  sheet.cell("G3").value(codigoEmbalagem);
+
+  // Linha base do template (onde já existem fórmulas/formatos)
+  const linhaBase = 6;
+  const rangeBase = sheet.range(`A${linhaBase}:H${linhaBase}`);
+
+  let linha = linhaBase;
 
   for (const r of registros) {
-    // A: MATERIAL (fórmula)
-    sheet[`A${linha}`] = { f: formulaMaterial };
+    // Para linhas além da primeira, copia a linha-base do template para manter fórmulas/estilos
+    if (linha > linhaBase) {
+      rangeBase.copyTo(sheet.range(`A${linha}:H${linha}`));
+    }
 
-    // B: HC (BAG)
-    sheet[`B${linha}`] = { t: "n", v: Number(r.bag) };
-
-    // C: PESO BRUTO
-    sheet[`C${linha}`] = { t: "n", v: Number(r.bruto) };
-
-    // D: UNID
-    sheet[`D${linha}`] = { t: "s", v: "KG" };
-
-    // E: BAG + EMBALAGEM (mapeado para "Liquido" do formulário)
-    sheet[`E${linha}`] = { t: "n", v: Number(r.liquido) };
-
-    // F: UNID.
-    sheet[`F${linha}`] = { t: "s", v: "KG" };
-
-    // G/H: fórmulas
-    sheet[`G${linha}`] = { f: formulaLiquido(linha) };
-    sheet[`H${linha}`] = { f: formulaLiquido(linha) };
+    // Preenche apenas os valores variáveis
+    sheet.cell(`B${linha}`).value(Number(r.bag));     // HC
+    sheet.cell(`C${linha}`).value(Number(r.bruto));   // PESO BRUTO
+    sheet.cell(`E${linha}`).value(Number(r.liquido)); // BAG + EMBALAGEM
 
     linha++;
   }
 
-  XLSX.writeFile(workbook, `Pesagem_${loteFiltro}_${dataFiltro}.xlsx`);
+  // Gera arquivo final mantendo estrutura do template
+  const out = await wb.outputAsync();
+  const blob = new Blob([out], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  });
+
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `Pesagem_${loteFiltro}_${dataFiltro}.xlsx`;
+  link.click();
 }
+
 
 btnGerarExcel.addEventListener("click", async () => {
   const dataFiltro = expData.value;
