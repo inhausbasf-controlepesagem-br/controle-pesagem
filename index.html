@@ -118,6 +118,61 @@ th, td {
 th {
     background: #eee;
 }
+
+/* ===== MODAL EXPORTAÇÃO ===== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  z-index: 9999;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  width: min(760px, 96vw);
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+  overflow: hidden;
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid #eee;
+}
+.modal-header h3 { margin: 0; font-size: 1.05rem; }
+.modal-close {
+  border: none;
+  background: transparent;
+  color: #333;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+.modal-body { padding: 16px; }
+.modal-footer {
+  padding: 14px 16px;
+  border-top: 1px solid #eee;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.btn-secondary { background: #6c757d; }
+.btn-primary { background: #0b5ed7; }
+.modal-msg {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 8px;
+  background: #f4f6f8;
+  font-size: 0.92rem;
+}
+
 </style>
 </head>
 
@@ -196,7 +251,7 @@ th {
         </div>
     </div>
 
-    <button type="button" onclick="salvarRegistro()">Salvar Registro</button>
+    <button type="submit">Salvar Registro</button>
     <button type="button" class="export" onclick="exportarExcel()">Exportar Excel</button>
 </form>
 
@@ -220,6 +275,46 @@ th {
 </div>
 </div>
 
+
+<!-- MODAL EXPORTAÇÃO -->
+<div id="exportModal" class="modal-overlay" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-header">
+      <h3 id="modalTitle">Exportar para Excel</h3>
+      <button type="button" class="modal-close" id="btnFecharModal" aria-label="Fechar">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="inline">
+        <div class="group">
+          <label for="expData">Data</label>
+          <input type="date" id="expData" required>
+        </div>
+        <div class="group">
+          <label for="expLote">Lote</label>
+          <input type="text" id="expLote" placeholder="Ex: 12906590B3" required>
+        </div>
+        <div class="group">
+          <label for="expEmbalagem">Modelo da Embalagem</label>
+          <select id="expEmbalagem" required>
+            <option value="">Selecione...</option>
+            <option value="67674704">67674704</option>
+            <option value="67641311">67641311</option>
+          </select>
+        </div>
+      </div>
+
+      <p id="expMsg" class="modal-msg" style="display:none;"></p>
+    </div>
+
+    <div class="modal-footer">
+      <button type="button" id="btnCancelarExport" class="btn-secondary">Cancelar</button>
+      <button type="button" id="btnGerarExcel" class="btn-primary">Gerar Excel</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import {
@@ -228,7 +323,10 @@ import {
   addDoc,
   deleteDoc,
   onSnapshot,
-  doc
+  doc,
+  query,
+  where,
+  getDocs
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -299,30 +397,24 @@ const bagInput = document.getElementById("bag");
 const pesoBrutoInput = document.getElementById("pesoBruto");
 const pesoLiquidoInput = document.getElementById("pesoLiquido");
 
-window.salvarRegistro = async () => {
-  try {
-    await addDoc(pesagensRef, {
-      data: dataInput.value,
-      lote: loteInput.value,
-      turno: turnoInput.value,
-      operador: Array.from(operadorInput.selectedOptions)
-        .map(o => o.value)
-        .join(" / "),
-      pesadoPor: pesadoPorInput.value,
-      bag: bagInput.value,
-      bruto: pesoBrutoInput.value,
-      liquido: pesoLiquidoInput.value
-    });
+document.getElementById("formPesagem").addEventListener("submit", async e => {
+  e.preventDefault();
 
-    document.getElementById("formPesagem").reset();
-    alert("Registro salvo com sucesso!");
+  await addDoc(pesagensRef, {
+    data: dataInput.value,
+    lote: loteInput.value,
+    turno: turnoInput.value,
+    operador: Array.from(operadorInput.selectedOptions)
+      .map(o => o.value)
+      .join(" / "),
+    pesadoPor: pesadoPorInput.value,
+    bag: bagInput.value,
+    bruto: pesoBrutoInput.value,
+    liquido: pesoLiquidoInput.value
+  });
 
-  } catch (erro) {
-    console.error("Erro ao salvar:", erro);
-    alert("Erro ao salvar o registro. Veja o console.");
-  }
-};
-
+  e.target.reset();
+});
 
 /* ===== EXCLUIR ===== */
 window.excluir = async id => {
@@ -331,20 +423,166 @@ window.excluir = async id => {
   }
 };
 
-/* ===== EXPORTAR EXCEL ===== */
-window.exportarExcel = () => {
-  let csv = "Data;Lote;Turno;BAG;Bruto;Liquido;Operador;Pesado por\n";
-  document.querySelectorAll("#tbody tr").forEach(row => {
-    const cols = row.querySelectorAll("td");
-    csv += [...cols].slice(0, 8).map(c => c.innerText).join(";") + "\n";
-  });
+/* ===== EXPORTAR EXCEL (COM MODAL + TEMPLATE) ===== */
 
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = "pesagem_bags.csv";
-  link.click();
-};
+// UI (modal)
+const exportModal = document.getElementById("exportModal");
+const expData = document.getElementById("expData");
+const expLote = document.getElementById("expLote");
+const expEmbalagem = document.getElementById("expEmbalagem");
+const expMsg = document.getElementById("expMsg");
+
+const btnFecharModal = document.getElementById("btnFecharModal");
+const btnCancelarExport = document.getElementById("btnCancelarExport");
+const btnGerarExcel = document.getElementById("btnGerarExcel");
+
+function abrirModalExport() {
+  expMsg.style.display = "none";
+  expMsg.textContent = "";
+
+  // Preenche automaticamente com valores do formulário (se existirem)
+  const dataForm = document.getElementById("data")?.value;
+  const loteForm = document.getElementById("lote")?.value;
+  const embForm = document.getElementById("embalagem")?.value;
+
+  if (dataForm) expData.value = dataForm;
+  if (loteForm) expLote.value = loteForm;
+  if (embForm) expEmbalagem.value = embForm;
+
+  exportModal.classList.add("open");
+  exportModal.setAttribute("aria-hidden", "false");
+  expData.focus();
+}
+
+function fecharModalExport() {
+  exportModal.classList.remove("open");
+  exportModal.setAttribute("aria-hidden", "true");
+}
+
+function setMsg(texto) {
+  expMsg.textContent = texto;
+  expMsg.style.display = "block";
+}
+
+btnFecharModal.addEventListener("click", fecharModalExport);
+btnCancelarExport.addEventListener("click", fecharModalExport);
+
+// fecha clicando fora
+exportModal.addEventListener("click", (e) => {
+  if (e.target === exportModal) fecharModalExport();
+});
+
+// fecha com ESC
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && exportModal.classList.contains("open")) fecharModalExport();
+});
+
+// Handler do botão do formulário
+window.exportarExcel = () => abrirModalExport();
+
+async function gerarExcelComFiltros(dataFiltro, loteFiltro, embalagem) {
+  let codigoEmbalagem = "";
+  if (embalagem === "67674704") codigoEmbalagem = "#4704";
+  else if (embalagem === "67641311") codigoEmbalagem = "#1311";
+  else throw new Error("Modelo de embalagem inválido.");
+
+  // Busca no Firestore (data + lote)
+  const q = query(
+    pesagensRef,
+    where("data", "==", dataFiltro),
+    where("lote", "==", loteFiltro)
+  );
+
+  const snapshot = await getDocs(q);
+
+  if (snapshot.empty) {
+    throw new Error("Nenhum registro encontrado para os filtros informados.");
+  }
+
+  // Carrega o template (deve estar no mesmo nível do index.html no GitHub)
+  const response = await fetch("PLANILHA.xlsx", { cache: "no-store" });
+  if (!response.ok) throw new Error("Não encontrei o arquivo PLANILHA.xlsx no site.");
+  const arrayBuffer = await response.arrayBuffer();
+
+  const workbook = XLSX.read(arrayBuffer, { type: "array" });
+  const sheetName = workbook.SheetNames[0];
+  const sheet = workbook.Sheets[sheetName];
+
+  // Cabeçalho conforme o seu template
+  sheet["B4"] = { t: "s", v: loteFiltro };      // LOTE
+  sheet["E3"] = { t: "s", v: dataFiltro };      // INÍCIO
+  sheet["G3"] = { t: "s", v: codigoEmbalagem }; // EMBALAG.
+
+  // Ordena por BAG para ficar organizado
+  const registros = [];
+  snapshot.forEach(d => registros.push(d.data()));
+  registros.sort((a, b) => Number(a.bag) - Number(b.bag));
+
+  // Primeira linha de dados (template)
+  let linha = 6;
+
+  // MATERIAL mantém fórmula (depende de $G$3)
+  const formulaMaterial = 'IFS($G$3="#1311","50825434",$G$3="#4704","50737403")';
+
+  // G/H derivados de E (ajuste se seu template mudar)
+  const formulaLiquido = (l) => `IFERROR(IF(E${l}>0,E${l}-3.5,"-"),-3.5)`;
+
+  for (const r of registros) {
+    // A: MATERIAL (fórmula)
+    sheet[`A${linha}`] = { f: formulaMaterial };
+
+    // B: HC (BAG)
+    sheet[`B${linha}`] = { t: "n", v: Number(r.bag) };
+
+    // C: PESO BRUTO
+    sheet[`C${linha}`] = { t: "n", v: Number(r.bruto) };
+
+    // D: UNID
+    sheet[`D${linha}`] = { t: "s", v: "KG" };
+
+    // E: BAG + EMBALAGEM (mapeado para "Liquido" do formulário)
+    sheet[`E${linha}`] = { t: "n", v: Number(r.liquido) };
+
+    // F: UNID.
+    sheet[`F${linha}`] = { t: "s", v: "KG" };
+
+    // G/H: fórmulas
+    sheet[`G${linha}`] = { f: formulaLiquido(linha) };
+    sheet[`H${linha}`] = { f: formulaLiquido(linha) };
+
+    linha++;
+  }
+
+  XLSX.writeFile(workbook, `Pesagem_${loteFiltro}_${dataFiltro}.xlsx`);
+}
+
+btnGerarExcel.addEventListener("click", async () => {
+  const dataFiltro = expData.value;
+  const loteFiltro = expLote.value.trim();
+  const embalagem = expEmbalagem.value;
+
+  if (!dataFiltro || !loteFiltro || !embalagem) {
+    setMsg("Preencha Data, Lote e Modelo da Embalagem.");
+    return;
+  }
+
+  btnGerarExcel.disabled = true;
+  btnCancelarExport.disabled = true;
+  btnFecharModal.disabled = true;
+  setMsg("Gerando arquivo...");
+
+  try {
+    await gerarExcelComFiltros(dataFiltro, loteFiltro, embalagem);
+    fecharModalExport();
+  } catch (err) {
+    console.error(err);
+    setMsg(err.message || "Erro ao gerar Excel. Veja o console.");
+  } finally {
+    btnGerarExcel.disabled = false;
+    btnCancelarExport.disabled = false;
+    btnFecharModal.disabled = false;
+  }
+});
 </script>
 
 </body>
