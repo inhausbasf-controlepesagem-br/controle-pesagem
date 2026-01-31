@@ -173,20 +173,96 @@ th {
   font-size: 0.92rem;
 }
 
+
+/* ===== LOGIN ===== */
+.login-card{
+  width: min(440px, 92vw);
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 12px;
+  padding: 18px;
+  margin-top: 14px;
+  backdrop-filter: blur(6px);
+}
+#capa label{ text-align:left; }
+#capa input{
+  border: none;
+  border-radius: 8px;
+  padding: 10px;
+}
+.login-msg{
+  margin: 10px 0 0 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.18);
+  font-size: 0.95rem;
+}
+.login-hint{
+  margin: 10px 0 0 0;
+  opacity: 0.9;
+  font-size: 0.9rem;
+}
+
+/* ===== TOPBAR ===== */
+.topbar{
+  max-width: 1000px;
+  margin: 0 auto 14px auto;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+}
+.topbar-left{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.badge{
+  display:inline-block;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #0b5ed7;
+  color:#fff;
+  font-size: 0.85rem;
+}
+.badge-muted{
+  background: #6c757d;
+}
+
 </style>
 </head>
 
 <body>
 
-<!-- CAPA -->
+<!-- CAPA / LOGIN -->
 <div id="capa">
     <h1>Controle de Pesagem de Bags</h1>
-    <button onclick="acessar()">Acessar</button>
+    <div class="login-card">
+        <div class="group">
+            <label for="loginEmail">E-mail</label>
+            <input type="email" id="loginEmail" placeholder="ex: operador@empresa.com" autocomplete="username">
+        </div>
+        <div class="group">
+            <label for="loginSenha">Senha</label>
+            <input type="password" id="loginSenha" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <button type="button" id="btnLogin" class="btn-primary">Entrar</button>
+        <p id="loginMsg" class="login-msg" style="display:none;"></p>
+        <p class="login-hint">Perfis: <b>operador</b>, <b>supervisor</b>, <b>exportador</b></p>
+    </div>
 </div>
-
 <!-- SISTEMA -->
 <div id="sistema">
-<h2>Formulário de Pesagem</h2>
+  <div class="topbar">
+    <div class="topbar-left">
+      <h2 style="margin:0;">Formulário de Pesagem</h2>
+      <span class="badge" id="roleBadge" title="Perfil">—</span>
+      <span class="badge badge-muted" id="userBadge" title="Usuário">—</span>
+    </div>
+    <button type="button" id="btnLogout" class="btn-secondary">Sair</button>
+  </div>
+
 
 <form id="formPesagem">
     <div class="inline">
@@ -316,10 +392,13 @@ th {
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx-populate/browser/xlsx-populate.min.js"></script>
 <script type="module">
-/* EXPORT_VERSION: 2026-01-31-v2 */
-console.log("EXPORT_VERSION: 2026-01-31-v2");
-
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import {
+  getAuth,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import {
   getFirestore,
   collection,
@@ -329,7 +408,9 @@ import {
   doc,
   query,
   where,
-  getDocs
+  getDocs,
+  serverTimestamp,
+  getDoc
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -346,6 +427,155 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const pesagensRef = collection(db, "pesagens");
 
+const auth = getAuth(app);
+
+let CURRENT_ROLE = null;
+let CURRENT_UID = null;
+let unsubscribePesagens = null;
+
+async function getUserRole(uid){
+  const ref = doc(db, "users", uid);
+  const snap = await getDoc(ref);
+  return snap.exists() ? (snap.data().role || null) : null;
+}
+
+function setLoginMsg(text){
+  const el = document.getElementById("loginMsg");
+  el.textContent = text;
+  el.style.display = "block";
+}
+
+function clearLoginMsg(){
+  const el = document.getElementById("loginMsg");
+  el.textContent = "";
+  el.style.display = "none";
+}
+
+function setUIByRole(){
+  const roleBadge = document.getElementById("roleBadge");
+  const userBadge = document.getElementById("userBadge");
+  roleBadge.textContent = CURRENT_ROLE || "—";
+  userBadge.textContent = CURRENT_UID ? (CURRENT_UID.slice(0,8) + "…") : "—";
+
+  const isExportador = CURRENT_ROLE === "exportador";
+  const isOperador = CURRENT_ROLE === "operador";
+  const isSupervisor = CURRENT_ROLE === "supervisor";
+
+  const form = document.getElementById("formPesagem");
+  const btnSalvar = form.querySelector('button[type="submit"]');
+  const btnExport = form.querySelector('button.export');
+
+  btnExport.disabled = !(isOperador || isSupervisor || isExportador);
+  btnSalvar.disabled = isExportador;
+
+  const inputs = form.querySelectorAll("input, select");
+  inputs.forEach(el => {
+    if (["expData","expLote","expEmbalagem"].includes(el.id)) return;
+    if (isExportador) el.setAttribute("disabled", "disabled");
+    else el.removeAttribute("disabled");
+  });
+}
+
+function showSistema(){
+  document.getElementById("capa").style.display = "none";
+  document.getElementById("sistema").style.display = "block";
+}
+
+function showCapa(){
+  document.getElementById("sistema").style.display = "none";
+  document.getElementById("capa").style.display = "flex";
+}
+
+function subscribeRealtime(){
+  const tbody = document.getElementById("tbody");
+  if (unsubscribePesagens) unsubscribePesagens();
+
+  unsubscribePesagens = onSnapshot(pesagensRef, snapshot => {
+    tbody.innerHTML = "";
+
+    const nowMs = Date.now();
+    snapshot.forEach(docSnap => {
+      const r = docSnap.data();
+
+      let canDelete = false;
+      if (CURRENT_ROLE === "supervisor") {
+        canDelete = true;
+      } else if (CURRENT_ROLE === "operador") {
+        const createdByOk = r.createdBy && (r.createdBy === CURRENT_UID);
+        const createdAtOk = r.createdAt && typeof r.createdAt.toDate === "function";
+        if (createdByOk && createdAtOk) {
+          const createdMs = r.createdAt.toDate().getTime();
+          canDelete = (nowMs - createdMs) <= (15 * 60 * 1000);
+        }
+      }
+
+      const actionCell = canDelete
+        ? `<td class="actions"><button onclick="excluir('${docSnap.id}')">Excluir</button></td>`
+        : `<td class="actions">—</td>`;
+
+      tbody.innerHTML += `
+        <tr>
+          <td>${r.data ?? ""}</td>
+          <td>${r.lote ?? ""}</td>
+          <td>${r.turno ?? ""}</td>
+          <td>${r.bag ?? ""}</td>
+          <td>${r.bruto ?? ""}</td>
+          <td>${r.liquido ?? ""}</td>
+          <td>${r.operador ?? ""}</td>
+          <td>${r.pesadoPor ?? ""}</td>
+          ${actionCell}
+        </tr>`;
+    });
+  });
+}
+
+document.getElementById("btnLogin").addEventListener("click", async () => {
+  clearLoginMsg();
+  const email = document.getElementById("loginEmail").value.trim();
+  const senha = document.getElementById("loginSenha").value;
+
+  if (!email || !senha) {
+    setLoginMsg("Informe e-mail e senha.");
+    return;
+  }
+
+  try{
+    await signInWithEmailAndPassword(auth, email, senha);
+  } catch (e){
+    console.error(e);
+    setLoginMsg("Falha ao entrar. Verifique e-mail/senha.");
+  }
+});
+
+document.getElementById("btnLogout").addEventListener("click", async () => {
+  await signOut(auth);
+});
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    CURRENT_ROLE = null;
+    CURRENT_UID = null;
+    if (unsubscribePesagens) unsubscribePesagens();
+    showCapa();
+    return;
+  }
+
+  CURRENT_UID = user.uid;
+  const role = await getUserRole(user.uid);
+
+  if (!role) {
+    await signOut(auth);
+    showCapa();
+    setLoginMsg("Seu usuário não tem perfil (role) cadastrado. Peça ao supervisor para configurar.");
+    return;
+  }
+
+  CURRENT_ROLE = role;
+  showSistema();
+  setUIByRole();
+  subscribeRealtime();
+});
+
 /* ===== OPERADORES ===== */
 const operadores = [
   "Manoel","Temário","Gérson","Eraldo","Edson",
@@ -360,34 +590,8 @@ operadores.forEach(op => {
   pesadoSelect.innerHTML += `<option>${op}</option>`;
 });
 
-/* ===== CAPA ===== */
-window.acessar = () => {
-  document.getElementById("capa").style.display = "none";
-  document.getElementById("sistema").style.display = "block";
-};
-
 /* ===== RENDER EM TEMPO REAL ===== */
-const tbody = document.getElementById("tbody");
-
-onSnapshot(pesagensRef, snapshot => {
-  tbody.innerHTML = "";
-  snapshot.forEach(docSnap => {
-    const r = docSnap.data();
-    tbody.innerHTML += `
-      <tr>
-        <td>${r.data}</td>
-        <td>${r.lote}</td>
-        <td>${r.turno}</td>
-        <td>${r.bag}</td>
-        <td>${r.bruto}</td>
-        <td>${r.liquido}</td>
-        <td>${r.operador}</td>
-        <td>${r.pesadoPor}</td>
-        <td class="actions">
-          <button onclick="excluir('${docSnap.id}')">Excluir</button>
-        </td>
-      </tr>`;
-  });
+// (assinatura em tempo real é iniciada após login)
 });
 
 /* ===== SALVAR ===== */
@@ -403,6 +607,15 @@ const pesoLiquidoInput = document.getElementById("pesoLiquido");
 document.getElementById("formPesagem").addEventListener("submit", async e => {
   e.preventDefault();
 
+  if (CURRENT_ROLE === "exportador") {
+    alert("Seu perfil não permite lançar registros.");
+    return;
+  }
+  if (!auth.currentUser) {
+    alert("Faça login para lançar registros.");
+    return;
+  }
+
   await addDoc(pesagensRef, {
     data: dataInput.value,
     lote: loteInput.value,
@@ -413,14 +626,27 @@ document.getElementById("formPesagem").addEventListener("submit", async e => {
     pesadoPor: pesadoPorInput.value,
     bag: bagInput.value,
     bruto: pesoBrutoInput.value,
-    liquido: pesoLiquidoInput.value
+    liquido: pesoLiquidoInput.value,
+
+    createdAt: serverTimestamp(),
+    createdBy: auth.currentUser.uid
   });
 
   e.target.reset();
 });
+e.target.reset();
+});
 
 /* ===== EXCLUIR ===== */
 window.excluir = async id => {
+  if (!auth.currentUser) {
+    alert("Faça login para excluir.");
+    return;
+  }
+  if (!(CURRENT_ROLE === "supervisor" || CURRENT_ROLE === "operador")) {
+    alert("Seu perfil não permite excluir registros.");
+    return;
+  }
   if (confirm("Deseja realmente excluir este registro?")) {
     await deleteDoc(doc(db, "pesagens", id));
   }
@@ -530,38 +756,14 @@ async function gerarExcelComFiltros(dataFiltro, loteFiltro, embalagem) {
 
   // Linha base do template (onde já existem fórmulas/formatos)
   const linhaBase = 6;
+  const rangeBase = sheet.range(`A${linhaBase}:H${linhaBase}`);
 
-// Copia uma linha "modelo" (estilo + fórmulas + valores) para outra linha.
-// Isso preserva a estrutura do template sem depender de métodos não suportados no build do XlsxPopulate.
-function copiarLinhaTemplate(sheet, linhaOrigem, linhaDestino) {
-  const cols = ["A","B","C","D","E","F","G","H"];
-
-  // Copiar altura da linha (se existir no template)
-  try {
-    const h = sheet.row(linhaOrigem).height();
-    if (h) sheet.row(linhaDestino).height(h);
-  } catch (_) {}
-
-  cols.forEach(col => {
-    const src = sheet.cell(`${col}${linhaOrigem}`);
-    const dst = sheet.cell(`${col}${linhaDestino}`);
-
-    // Copia estilo
-    try { dst.style(src.style()); } catch (_) {}
-
-    // Copia fórmula ou valor
-    const f = src.formula();
-    if (f) dst.formula(f);
-    else dst.value(src.value());
-  });
-}
-
-let linha = linhaBase;
+  let linha = linhaBase;
 
   for (const r of registros) {
     // Para linhas além da primeira, copia a linha-base do template para manter fórmulas/estilos
     if (linha > linhaBase) {
-      copiarLinhaTemplate(sheet, linhaBase, linha);
+      rangeBase.copyTo(sheet.range(`A${linha}:H${linha}`));
     }
 
     // Preenche apenas os valores variáveis
