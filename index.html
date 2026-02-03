@@ -302,6 +302,15 @@ th {
             <input type="text" id="lote" required>
         </div>
         <div class="group">
+            <label>Modelo de embalagem</label>
+            <select id="embalagem" required>
+                <option value="" selected disabled>Selecione…</option>
+                <option value="67674704">67674704 (#4704)</option>
+                <option value="67641311">67641311 (#1311)</option>
+            </select>
+        </div>
+
+        <div class="group">
             <label>Turno</label>
             <select id="turno" required>
                 <option>07h às 15h</option>
@@ -365,7 +374,8 @@ th {
     <th>Data</th>
     <th>Lote</th>
     <th>Turno</th>
-    <th>BAG</th>
+    <th>Embalagem</th>
+                <th>BAG</th>
     <th>Bruto</th>
     <th>Líquido</th>
     <th>Operador</th>
@@ -548,7 +558,8 @@ function subscribeRealtime(){
           <td>${r.data ?? ""}</td>
           <td>${r.lote ?? ""}</td>
           <td>${r.turno ?? ""}</td>
-          <td>${r.bag ?? ""}</td>
+          <td>${r.embalagem ?? ""}</td>
+                    <td>${r.bag ?? ""}</td>
           <td>${r.bruto ?? ""}</td>
           <td>${r.liquido ?? ""}</td>
           <td>${r.operador ?? ""}</td>
@@ -626,6 +637,7 @@ operadores.forEach(op => {
 /* ===== SALVAR ===== */
 const dataInput = document.getElementById("data");
 const loteInput = document.getElementById("lote");
+const embalagemInput = document.getElementById("embalagem");
 const turnoInput = document.getElementById("turno");
 const operadorInput = document.getElementById("operador");
 const pesadoPorInput = document.getElementById("pesadoPor");
@@ -648,6 +660,7 @@ document.getElementById("formPesagem").addEventListener("submit", async e => {
   await addDoc(pesagensRef, {
     data: dataInput.value,
     lote: loteInput.value,
+    embalagem: embalagemInput.value,
     turno: turnoInput.value,
     operador: Array.from(operadorInput.selectedOptions)
       .map(o => o.value)
