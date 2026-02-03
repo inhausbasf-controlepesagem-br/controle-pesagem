@@ -375,7 +375,7 @@ th {
     <th>Lote</th>
     <th>Turno</th>
     <th>Embalagem</th>
-                <th>BAG</th>
+    <th>BAG</th>
     <th>Bruto</th>
     <th>Líquido</th>
     <th>Operador</th>
@@ -559,7 +559,7 @@ function subscribeRealtime(){
           <td>${r.lote ?? ""}</td>
           <td>${r.turno ?? ""}</td>
           <td>${r.embalagem ?? ""}</td>
-                    <td>${r.bag ?? ""}</td>
+          <td>${r.bag ?? ""}</td>
           <td>${r.bruto ?? ""}</td>
           <td>${r.liquido ?? ""}</td>
           <td>${r.operador ?? ""}</td>
@@ -869,7 +869,7 @@ btnGerarExcel.addEventListener("click", async () => {
   const loteFiltro = expLote.value.trim();
   const embalagem = expEmbalagem.value;
 
-  if (!dataFiltro || !loteFiltro || !embalagem) {
+  if (!dataFiltro || !loteFiltro || !embalagemFiltro) {
     setMsg("Preencha Data, Lote e Modelo da Embalagem.");
     return;
   }
@@ -880,7 +880,7 @@ btnGerarExcel.addEventListener("click", async () => {
   setMsg("Gerando arquivo...");
 
   try {
-    await gerarExcelComFiltros(dataFiltro, loteFiltro, embalagem);
+    await gerarExcelComFiltros(dataFiltro, loteFiltro, embalagemFiltro);
     fecharModalExport();
   } catch (err) {
     console.error(err);
