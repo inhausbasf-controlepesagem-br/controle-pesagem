@@ -233,27 +233,26 @@ th {
 
 /* ===== CRÉDITOS ===== */
 .app-footer{
-  margin-top: 26px;
-  padding: 12px 10px;
+  margin-top: 18px;
+  padding: 10px 12px;
   text-align: center;
   font-size: 0.85rem;
-  color: rgba(255,255,255,0.85);
+  color: #666;
+  background: #f5f7fa;
+  border-top: 1px solid #e1e5ea;
 }
-#sistema .app-footer{
-  color:#666;
-  background:#f5f7fa;
-  border-top:1px solid #e1e5ea;
-  border-radius: 0 0 10px 10px;
-  max-width: 1000px;
-  margin: 18px auto 0 auto;
-}
+
+/* Na tela azul (capa), o rodapé fica embaixo e com texto branco */
+#capa { position: relative; }
 #capa .app-footer{
   position: absolute;
   bottom: 10px;
-  left: 0;
-  right: 0;
+  left: 10px;
+  right: 10px;
+  background: transparent;
+  border-top: none;
+  color: rgba(255,255,255,0.9);
 }
-
 </style>
 </head>
 
@@ -275,6 +274,10 @@ th {
         <p id="loginMsg" class="login-msg" style="display:none;"></p>
         <p class="login-hint">Perfis: <b>operador</b>, <b>supervisor</b>, <b>exportador</b></p>
     </div>
+  <footer class="app-footer">
+    © <span class="anoCopyright"></span> — Sistema desenvolvido por <strong>Jessé Ferreira da Anunciação</strong>. Todos os direitos reservados.
+  </footer>
+
 </div>
 <!-- SISTEMA -->
 <div id="sistema">
@@ -373,8 +376,11 @@ th {
 <tbody id="tbody"></tbody>
 </table>
 </div>
-</div>
+  <footer class="app-footer">
+    © <span class="anoCopyright"></span> — Sistema desenvolvido por <strong>Jessé Ferreira da Anunciação</strong>. Todos os direitos reservados.
+  </footer>
 
+</div>
 
 <!-- MODAL EXPORTAÇÃO -->
 <div id="exportModal" class="modal-overlay" aria-hidden="true">
@@ -863,13 +869,12 @@ btnGerarExcel.addEventListener("click", async () => {
     btnFecharModal.disabled = false;
   }
 });
+// Ano automático nos créditos
+try{
+  const y = String(new Date().getFullYear());
+  document.querySelectorAll(".anoCopyright").forEach(el => el.textContent = y);
+}catch(e){}
+
 </script>
-
-
-<footer class="app-footer">
-  © <span id="anoCopyright"></span> — Sistema desenvolvido por <strong>Jessé Ferreira da Anunciação</strong>. Todos os direitos reservados.
-</footer>
-
-
 </body>
 </html>
