@@ -230,6 +230,30 @@ th {
   background: #6c757d;
 }
 
+
+/* ===== CRÉDITOS ===== */
+.app-footer{
+  margin-top: 26px;
+  padding: 12px 10px;
+  text-align: center;
+  font-size: 0.85rem;
+  color: rgba(255,255,255,0.85);
+}
+#sistema .app-footer{
+  color:#666;
+  background:#f5f7fa;
+  border-top:1px solid #e1e5ea;
+  border-radius: 0 0 10px 10px;
+  max-width: 1000px;
+  margin: 18px auto 0 auto;
+}
+#capa .app-footer{
+  position: absolute;
+  bottom: 10px;
+  left: 0;
+  right: 0;
+}
+
 </style>
 </head>
 
@@ -319,7 +343,7 @@ th {
         </div>
         <div class="group">
             <label>Peso Bruto (kg)</label>
-            <<input type="text" id="pesoBruto" inputmode="decimal" placeholder="Ex: 1102,50" required>
+            <input type="text" id="pesoBruto" inputmode="decimal" placeholder="Ex: 1102,50" required>
         </div>
         <div class="group">
             <label>Peso Líquido (kg)</label>
@@ -841,9 +865,11 @@ btnGerarExcel.addEventListener("click", async () => {
 });
 </script>
 
+
 <footer class="app-footer">
   © <span id="anoCopyright"></span> — Sistema desenvolvido por <strong>Jessé Ferreira da Anunciação</strong>. Todos os direitos reservados.
 </footer>
+
 
 </body>
 </html>
