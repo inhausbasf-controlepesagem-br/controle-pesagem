@@ -173,96 +173,20 @@ th {
   font-size: 0.92rem;
 }
 
-
-/* ===== LOGIN ===== */
-.login-card{
-  width: min(440px, 92vw);
-  background: rgba(255,255,255,0.12);
-  border: 1px solid rgba(255,255,255,0.25);
-  border-radius: 12px;
-  padding: 18px;
-  margin-top: 14px;
-  backdrop-filter: blur(6px);
-}
-#capa label{ text-align:left; }
-#capa input{
-  border: none;
-  border-radius: 8px;
-  padding: 10px;
-}
-.login-msg{
-  margin: 10px 0 0 0;
-  padding: 10px;
-  border-radius: 8px;
-  background: rgba(0,0,0,0.18);
-  font-size: 0.95rem;
-}
-.login-hint{
-  margin: 10px 0 0 0;
-  opacity: 0.9;
-  font-size: 0.9rem;
-}
-
-/* ===== TOPBAR ===== */
-.topbar{
-  max-width: 1000px;
-  margin: 0 auto 14px auto;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap: 10px;
-}
-.topbar-left{
-  display:flex;
-  align-items:center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.badge{
-  display:inline-block;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: #0b5ed7;
-  color:#fff;
-  font-size: 0.85rem;
-}
-.badge-muted{
-  background: #6c757d;
-}
-
 </style>
 </head>
 
 <body>
 
-<!-- CAPA / LOGIN -->
+<!-- CAPA -->
 <div id="capa">
     <h1>Controle de Pesagem de Bags</h1>
-    <div class="login-card">
-        <div class="group">
-            <label for="loginEmail">E-mail</label>
-            <input type="email" id="loginEmail" placeholder="ex: operador@empresa.com" autocomplete="username">
-        </div>
-        <div class="group">
-            <label for="loginSenha">Senha</label>
-            <input type="password" id="loginSenha" placeholder="••••••••" autocomplete="current-password">
-        </div>
-        <button type="button" id="btnLogin" class="btn-primary">Entrar</button>
-        <p id="loginMsg" class="login-msg" style="display:none;"></p>
-        <p class="login-hint">Perfis: <b>operador</b>, <b>supervisor</b>, <b>exportador</b></p>
-    </div>
+    <button onclick="acessar()">Acessar</button>
 </div>
+
 <!-- SISTEMA -->
 <div id="sistema">
-  <div class="topbar">
-    <div class="topbar-left">
-      <h2 style="margin:0;">Formulário de Pesagem</h2>
-      <span class="badge" id="roleBadge" title="Perfil">—</span>
-      <span class="badge badge-muted" id="userBadge" title="Usuário">—</span>
-    </div>
-    <button type="button" id="btnLogout" class="btn-secondary">Sair</button>
-  </div>
-
+<h2>Formulário de Pesagem</h2>
 
 <form id="formPesagem">
     <div class="inline">
@@ -319,11 +243,11 @@ th {
         </div>
         <div class="group">
             <label>Peso Bruto (kg)</label>
-            <input type="number" id="pesoBruto" required>
+            <input type="text" id="pesoBruto" inputmode="decimal" placeholder="Ex: 1102,50" required>
         </div>
         <div class="group">
             <label>Peso Líquido (kg)</label>
-            <input type="number" id="pesoLiquido" required>
+            <input type="text" id="pesoLiquido" inputmode="decimal" placeholder="Ex: 1095,25" required>
         </div>
     </div>
 
@@ -390,15 +314,9 @@ th {
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/xlsx-populate/browser/xlsx-populate.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import {
-  getAuth,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  signOut
-} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import {
   getFirestore,
   collection,
@@ -408,9 +326,7 @@ import {
   doc,
   query,
   where,
-  getDocs,
-  serverTimestamp,
-  getDoc
+  getDocs
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -427,155 +343,6 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const pesagensRef = collection(db, "pesagens");
 
-const auth = getAuth(app);
-
-let CURRENT_ROLE = null;
-let CURRENT_UID = null;
-let unsubscribePesagens = null;
-
-async function getUserRole(uid){
-  const ref = doc(db, "users", uid);
-  const snap = await getDoc(ref);
-  return snap.exists() ? (snap.data().role || null) : null;
-}
-
-function setLoginMsg(text){
-  const el = document.getElementById("loginMsg");
-  el.textContent = text;
-  el.style.display = "block";
-}
-
-function clearLoginMsg(){
-  const el = document.getElementById("loginMsg");
-  el.textContent = "";
-  el.style.display = "none";
-}
-
-function setUIByRole(){
-  const roleBadge = document.getElementById("roleBadge");
-  const userBadge = document.getElementById("userBadge");
-  roleBadge.textContent = CURRENT_ROLE || "—";
-  userBadge.textContent = CURRENT_UID ? (CURRENT_UID.slice(0,8) + "…") : "—";
-
-  const isExportador = CURRENT_ROLE === "exportador";
-  const isOperador = CURRENT_ROLE === "operador";
-  const isSupervisor = CURRENT_ROLE === "supervisor";
-
-  const form = document.getElementById("formPesagem");
-  const btnSalvar = form.querySelector('button[type="submit"]');
-  const btnExport = form.querySelector('button.export');
-
-  btnExport.disabled = !(isOperador || isSupervisor || isExportador);
-  btnSalvar.disabled = isExportador;
-
-  const inputs = form.querySelectorAll("input, select");
-  inputs.forEach(el => {
-    if (["expData","expLote","expEmbalagem"].includes(el.id)) return;
-    if (isExportador) el.setAttribute("disabled", "disabled");
-    else el.removeAttribute("disabled");
-  });
-}
-
-function showSistema(){
-  document.getElementById("capa").style.display = "none";
-  document.getElementById("sistema").style.display = "block";
-}
-
-function showCapa(){
-  document.getElementById("sistema").style.display = "none";
-  document.getElementById("capa").style.display = "flex";
-}
-
-function subscribeRealtime(){
-  const tbody = document.getElementById("tbody");
-  if (unsubscribePesagens) unsubscribePesagens();
-
-  unsubscribePesagens = onSnapshot(pesagensRef, snapshot => {
-    tbody.innerHTML = "";
-
-    const nowMs = Date.now();
-    snapshot.forEach(docSnap => {
-      const r = docSnap.data();
-
-      let canDelete = false;
-      if (CURRENT_ROLE === "supervisor") {
-        canDelete = true;
-      } else if (CURRENT_ROLE === "operador") {
-        const createdByOk = r.createdBy && (r.createdBy === CURRENT_UID);
-        const createdAtOk = r.createdAt && typeof r.createdAt.toDate === "function";
-        if (createdByOk && createdAtOk) {
-          const createdMs = r.createdAt.toDate().getTime();
-          canDelete = (nowMs - createdMs) <= (15 * 60 * 1000);
-        }
-      }
-
-      const actionCell = canDelete
-        ? `<td class="actions"><button onclick="excluir('${docSnap.id}')">Excluir</button></td>`
-        : `<td class="actions">—</td>`;
-
-      tbody.innerHTML += `
-        <tr>
-          <td>${r.data ?? ""}</td>
-          <td>${r.lote ?? ""}</td>
-          <td>${r.turno ?? ""}</td>
-          <td>${r.bag ?? ""}</td>
-          <td>${r.bruto ?? ""}</td>
-          <td>${r.liquido ?? ""}</td>
-          <td>${r.operador ?? ""}</td>
-          <td>${r.pesadoPor ?? ""}</td>
-          ${actionCell}
-        </tr>`;
-    });
-  });
-}
-
-document.getElementById("btnLogin").addEventListener("click", async () => {
-  clearLoginMsg();
-  const email = document.getElementById("loginEmail").value.trim();
-  const senha = document.getElementById("loginSenha").value;
-
-  if (!email || !senha) {
-    setLoginMsg("Informe e-mail e senha.");
-    return;
-  }
-
-  try{
-    await signInWithEmailAndPassword(auth, email, senha);
-  } catch (e){
-    console.error(e);
-    setLoginMsg("Falha ao entrar. Verifique e-mail/senha.");
-  }
-});
-
-document.getElementById("btnLogout").addEventListener("click", async () => {
-  await signOut(auth);
-});
-
-onAuthStateChanged(auth, async (user) => {
-  if (!user) {
-    CURRENT_ROLE = null;
-    CURRENT_UID = null;
-    if (unsubscribePesagens) unsubscribePesagens();
-    showCapa();
-    return;
-  }
-
-  CURRENT_UID = user.uid;
-  const role = await getUserRole(user.uid);
-
-  if (!role) {
-    await signOut(auth);
-    showCapa();
-    setLoginMsg("Seu usuário não tem perfil (role) cadastrado. Peça ao supervisor para configurar.");
-    return;
-  }
-
-  CURRENT_ROLE = role;
-  showSistema();
-  setUIByRole();
-  subscribeRealtime();
-});
-
 /* ===== OPERADORES ===== */
 const operadores = [
   "Manoel","Temário","Gérson","Eraldo","Edson",
@@ -590,8 +357,35 @@ operadores.forEach(op => {
   pesadoSelect.innerHTML += `<option>${op}</option>`;
 });
 
+/* ===== CAPA ===== */
+window.acessar = () => {
+  document.getElementById("capa").style.display = "none";
+  document.getElementById("sistema").style.display = "block";
+};
+
 /* ===== RENDER EM TEMPO REAL ===== */
-// (assinatura em tempo real é iniciada após login)
+const tbody = document.getElementById("tbody");
+
+onSnapshot(pesagensRef, snapshot => {
+  tbody.innerHTML = "";
+  snapshot.forEach(docSnap => {
+    const r = docSnap.data();
+    tbody.innerHTML += `
+      <tr>
+        <td>${r.data}</td>
+        <td>${r.lote}</td>
+        <td>${r.turno}</td>
+        <td>${r.bag}</td>
+        <td>${(typeof r.bruto === "number") ? r.bruto.toFixed(2) : (r.bruto ?? "")}</td>
+        <td>${(typeof r.liquido === "number") ? r.liquido.toFixed(2) : (r.liquido ?? "")}</td>
+        <td>${r.operador}</td>
+        <td>${r.pesadoPor}</td>
+        <td class="actions">
+          <button onclick="excluir('${docSnap.id}')">Excluir</button>
+        </td>
+      </tr>`;
+  });
+});
 
 /* ===== SALVAR ===== */
 const dataInput = document.getElementById("data");
@@ -603,17 +397,29 @@ const bagInput = document.getElementById("bag");
 const pesoBrutoInput = document.getElementById("pesoBruto");
 const pesoLiquidoInput = document.getElementById("pesoLiquido");
 
+
+function parseDecimalBR(valor) {
+  // Aceita "1102,50" ou "1102.50" ou "1.102,50"
+  const v = (valor ?? "")
+    .toString()
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(/\./g, "")
+    .replace(",", ".");
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 document.getElementById("formPesagem").addEventListener("submit", async e => {
   e.preventDefault();
-
-  if (CURRENT_ROLE === "exportador") {
-    alert("Seu perfil não permite lançar registros.");
+  const brutoNum = parseDecimalBR(pesoBrutoInput.value);
+  const liquidoNum = parseDecimalBR(pesoLiquidoInput.value);
+  if (brutoNum === null || liquidoNum === null) {
+    alert("Informe Peso Bruto e Peso Líquido com números válidos (ex: 1102,50).");
     return;
   }
-  if (!auth.currentUser) {
-    alert("Faça login para lançar registros.");
-    return;
-  }
+  const bruto2 = Math.round(brutoNum * 100) / 100;
+  const liquido2 = Math.round(liquidoNum * 100) / 100;
 
   await addDoc(pesagensRef, {
     data: dataInput.value,
@@ -624,11 +430,8 @@ document.getElementById("formPesagem").addEventListener("submit", async e => {
       .join(" / "),
     pesadoPor: pesadoPorInput.value,
     bag: bagInput.value,
-    bruto: pesoBrutoInput.value,
-    liquido: pesoLiquidoInput.value,
-
-    createdAt: serverTimestamp(),
-    createdBy: auth.currentUser.uid
+    bruto: bruto2,
+    liquido: liquido2
   });
 
   e.target.reset();
@@ -636,14 +439,6 @@ document.getElementById("formPesagem").addEventListener("submit", async e => {
 
 /* ===== EXCLUIR ===== */
 window.excluir = async id => {
-  if (!auth.currentUser) {
-    alert("Faça login para excluir.");
-    return;
-  }
-  if (!(CURRENT_ROLE === "supervisor" || CURRENT_ROLE === "operador")) {
-    alert("Seu perfil não permite excluir registros.");
-    return;
-  }
   if (confirm("Deseja realmente excluir este registro?")) {
     await deleteDoc(doc(db, "pesagens", id));
   }
@@ -725,92 +520,62 @@ async function gerarExcelComFiltros(dataFiltro, loteFiltro, embalagem) {
     throw new Error("Nenhum registro encontrado para os filtros informados.");
   }
 
-  // Organiza por BAG
-  const registros = [];
-  snapshot.forEach(d => registros.push(d.data()));
-  registros.sort((a, b) => Number(a.bag) - Number(b.bag));
-
-  // Carrega o template preservando estilos/formatos
+  // Carrega o template (deve estar no mesmo nível do index.html no GitHub)
   const response = await fetch("PLANILHA.xlsx", { cache: "no-store" });
   if (!response.ok) throw new Error("Não encontrei o arquivo PLANILHA.xlsx no site.");
   const arrayBuffer = await response.arrayBuffer();
 
-  const wb = await XlsxPopulate.fromDataAsync(arrayBuffer);
+  const workbook = XLSX.read(arrayBuffer, { type: "array" });
+  const sheetName = workbook.SheetNames[0];
+  const sheet = workbook.Sheets[sheetName];
 
-  // Tenta pegar a aba "PESAGEM"; se não existir, usa a primeira
-  let sheet = wb.sheet("PESAGEM");
-  if (!sheet) sheet = wb.sheet(0);
+  // Cabeçalho conforme o seu template
+  sheet["B4"] = { t: "s", v: loteFiltro };      // LOTE
+  sheet["E3"] = { t: "s", v: dataFiltro };      // INÍCIO
+  sheet["G3"] = { t: "s", v: codigoEmbalagem }; // EMBALAG.
 
-  // Cabeçalho conforme o template
-  sheet.cell("B4").value(loteFiltro); // LOTE
+  // Ordena por BAG para ficar organizado
+  const registros = [];
+  snapshot.forEach(d => registros.push(d.data()));
+  registros.sort((a, b) => Number(a.bag) - Number(b.bag));
 
-  // INÍCIO como data real (mantém formato da célula do template)
-  const [yyyy, mm, dd] = dataFiltro.split("-").map(Number);
-  sheet.cell("E3").value(new Date(yyyy, mm - 1, dd));
+  // Primeira linha de dados (template)
+  let linha = 6;
 
-  // EMBALAG. (#4704 / #1311)
-  sheet.cell("G3").value(codigoEmbalagem);
+  // MATERIAL mantém fórmula (depende de $G$3)
+  const formulaMaterial = 'IFS($G$3="#1311","50825434",$G$3="#4704","50737403")';
 
-  // Linha base do template (onde já existem fórmulas/formatos)
-  const linhaBase = 6;
-  const rangeBase = sheet.range(`A${linhaBase}:H${linhaBase}`);
-
-  let linha = linhaBase;
+  // G/H derivados de E (ajuste se seu template mudar)
+  const formulaLiquido = (l) => `IFERROR(IF(E${l}>0,E${l}-3.5,"-"),-3.5)`;
 
   for (const r of registros) {
-    // Para linhas além da primeira, copia a linha-base do template para manter fórmulas/estilos
-    if (linha > linhaBase) {
-      const dest = sheet.range(`A${linha}:H${linha}`);
-      if (typeof rangeBase.copyTo === "function") {
-        // Algumas versões do xlsx-populate no browser não suportam copyTo()
-        rangeBase.copyTo(dest);
-      } else if (typeof rangeBase.copy === "function") {
-        // Outras versões suportam copy()
-        rangeBase.copy(dest);
-      } else {
-        // Fallback robusto: copia célula a célula (fórmula/valor + estilo)
-        for (let c = 1; c <= 8; c++) {
-          const baseCell = sheet.cell(linhaBase, c);
-          const newCell  = sheet.cell(linha, c);
+    // A: MATERIAL (fórmula)
+    sheet[`A${linha}`] = { f: formulaMaterial };
 
-          try {
-            const f = baseCell.formula();
-            if (f) newCell.formula(f);
-            else newCell.value(baseCell.value());
-          } catch (e) {
-            // Se der erro na fórmula, copia só o valor
-            newCell.value(baseCell.value());
-          }
+    // B: HC (BAG)
+    sheet[`B${linha}`] = { t: "n", v: Number(r.bag) };
 
-          try {
-            newCell.style(baseCell.style());
-          } catch (e) {
-            // Algumas builds do browser podem limitar estilos; ignora se falhar
-          }
-        }
-      }
-    }
+    // C: PESO BRUTO
+    sheet[`C${linha}`] = { t: "n", v: Number(r.bruto) };
 
-    // Preenche apenas os valores variáveis
-    sheet.cell(`B${linha}`).value(Number(r.bag));     // HC
-    sheet.cell(`C${linha}`).value(Number(r.bruto));   // PESO BRUTO
-    sheet.cell(`E${linha}`).value(Number(r.liquido)); // BAG + EMBALAGEM
+    // D: UNID
+    sheet[`D${linha}`] = { t: "s", v: "KG" };
+
+    // E: BAG + EMBALAGEM (mapeado para "Liquido" do formulário)
+    sheet[`E${linha}`] = { t: "n", v: Number(r.liquido) };
+
+    // F: UNID.
+    sheet[`F${linha}`] = { t: "s", v: "KG" };
+
+    // G/H: fórmulas
+    sheet[`G${linha}`] = { f: formulaLiquido(linha) };
+    sheet[`H${linha}`] = { f: formulaLiquido(linha) };
 
     linha++;
   }
 
-  // Gera arquivo final mantendo estrutura do template
-  const out = await wb.outputAsync();
-  const blob = new Blob([out], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-  });
-
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = `Pesagem_${loteFiltro}_${dataFiltro}.xlsx`;
-  link.click();
+  XLSX.writeFile(workbook, `Pesagem_${loteFiltro}_${dataFiltro}.xlsx`);
 }
-
 
 btnGerarExcel.addEventListener("click", async () => {
   const dataFiltro = expData.value;
