@@ -869,7 +869,7 @@ btnGerarExcel.addEventListener("click", async () => {
   const loteFiltro = expLote.value.trim();
   const embalagem = expEmbalagem.value;
 
-  if (!dataFiltro || !loteFiltro || !embalagemFiltro) {
+  if (!dataFiltro || !loteFiltro || !embalagem) {
     setMsg("Preencha Data, Lote e Modelo da Embalagem.");
     return;
   }
@@ -880,7 +880,7 @@ btnGerarExcel.addEventListener("click", async () => {
   setMsg("Gerando arquivo...");
 
   try {
-    await gerarExcelComFiltros(dataFiltro, loteFiltro, embalagemFiltro);
+    await gerarExcelComFiltros(dataFiltro, loteFiltro, embalagem);
     fecharModalExport();
   } catch (err) {
     console.error(err);
