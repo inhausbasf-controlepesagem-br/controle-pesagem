@@ -640,6 +640,24 @@ const pesoLiquidoInput = document.getElementById("pesoLiquido");
 document.getElementById("formPesagem").addEventListener("submit", async e => {
   e.preventDefault();
 
+  // Confirmação após informar o peso líquido
+  const pesoLiquido = pesoLiquidoInput.value?.trim();
+
+  if (!pesoLiquido) {
+    alert("Informe o peso líquido.");
+    return;
+  }
+
+  const confirmar = confirm(
+    `Confirma o lançamento com PESO LÍQUIDO = ${pesoLiquido} kg ?`
+  );
+
+  if (!confirmar) {
+    // Usuário clicou em "Não"
+    pesoLiquidoInput.focus();
+    return;
+  }
+
   if (CURRENT_ROLE === "exportador") {
     alert("Seu perfil não permite lançar registros.");
     return;
