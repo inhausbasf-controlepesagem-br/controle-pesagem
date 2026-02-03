@@ -751,8 +751,9 @@ async function gerarExcelComFiltros(dataFiltro, loteFiltro, embalagem) {
   const q = query(
     pesagensRef,
     where("data", "==", dataFiltro),
-    where("lote", "==", loteFiltro)
-  );
+    where("lote", "==", loteFiltro),
+    where("embalagem", "==", embalagem)
+);
 
   const snapshot = await getDocs(q);
 
