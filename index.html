@@ -761,7 +761,7 @@ async function gerarExcelComFiltros(dataFiltro, loteFiltro, embalagem) {
   registros.sort((a, b) => Number(a.bag) - Number(b.bag));
 
   // Carrega o template preservando estilos/formatos
-  const response = await fetch("PLANILHA.xlsx", { cache: "no-store" });
+  const response = await fetch(`PLANILHA.xlsx?v=${Date.now()}`, { cache: "no-store" });
   if (!response.ok) throw new Error("Não encontrei o arquivo PLANILHA.xlsx no site.");
   const arrayBuffer = await response.arrayBuffer();
 
@@ -771,7 +771,16 @@ async function gerarExcelComFiltros(dataFiltro, loteFiltro, embalagem) {
   let sheet = wb.sheet("PESAGEM");
   if (!sheet) sheet = wb.sheet(0);
 
-  // Cabeçalho conforme o template
+  // Limpa área de dados do template para NÃO carregar valores de exportações anteriores
+  // (mantém fórmulas do template nas demais colunas)
+  const linhaBase = 6;
+  const MAX_LINHAS = 400; // ajuste se um dia precisar exportar mais linhas
+  for (let i = linhaBase; i < linhaBase + MAX_LINHAS; i++) {
+    sheet.cell(`B${i}`).value(null); // HC
+    sheet.cell(`C${i}`).value(null); // PESO BRUTO
+    sheet.cell(`E${i}`).value(null); // BAG + EMBALAGEM
+  }
+// Cabeçalho conforme o template
   sheet.cell("B4").value(loteFiltro); // LOTE
 
   // INÍCIO como data real (mantém formato da célula do template)
@@ -782,7 +791,7 @@ async function gerarExcelComFiltros(dataFiltro, loteFiltro, embalagem) {
   sheet.cell("G3").value(codigoEmbalagem);
 
   // Linha base do template (onde já existem fórmulas/formatos)
-  const linhaBase = 6;
+  
   const rangeBase = sheet.range(`A${linhaBase}:H${linhaBase}`);
 
   let linha = linhaBase;
