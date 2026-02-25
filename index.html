@@ -886,6 +886,9 @@ let linha = linhaBase;
   }
 
   // Gera arquivo final mantendo estrutura do template
+  wb.calculationMode("auto");
+  wb.recalculate();
+
   const out = await wb.outputAsync();
   const blob = new Blob([out], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
