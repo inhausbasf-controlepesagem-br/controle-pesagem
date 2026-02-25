@@ -818,46 +818,69 @@ async function gerarExcelComFiltros(dataFiltro, loteFiltro, embalagem) {
   
   const rangeBase = sheet.range(`A${linhaBase}:H${linhaBase}`);
 
-  let linha = linhaBase;
+  
+
+  // --- Ajuste robusto de fórmulas/estilos para linhas seguintes ---
+  function shiftFormulaRows(formula, fromRow, toRow) {
+    const delta = toRow - fromRow;
+    // Ajusta referências tipo A6, AB12... Mantém $A$6 e A$6 intactos na parte da linha
+    return String(formula).replace(/(\$?[A-Z]{1,3})(\$?)(\d+)/g, (m, col, absRow, rowStr) => {
+      const row = parseInt(rowStr, 10);
+      if (absRow === "$") return m;            // linha absoluta (ex.: A$6) não muda
+      return `${col}${absRow}${row + delta}`;  // linha relativa muda
+    });
+  }
+
+  function cloneRowFromBase(sheet, baseRow, targetRow) {
+    for (let c = 1; c <= 8; c++) { // A..H
+      const baseCell = sheet.cell(baseRow, c);
+      const newCell  = sheet.cell(targetRow, c);
+
+      // Fórmula/valor
+      let f = null;
+      try { f = baseCell.formula(); } catch (e) {}
+      if (f) {
+        try {
+          newCell.formula(shiftFormulaRows(f, baseRow, targetRow));
+        } catch (e) {
+          newCell.value(baseCell.value());
+        }
+      } else {
+        newCell.value(baseCell.value());
+      }
+
+      // Estilo (cores/alinhamento/bordas/formatos)
+      try { newCell.style(baseCell.style()); } catch (e) {}
+    }
+  }
+
+  function parseDecimalBRExport(valor) {
+    // Aceita "1102,50" ou "1102.50" ou "1.102,50"
+    const v = (valor ?? "")
+      .toString()
+      .trim()
+      .replace(/\s+/g, "")
+      .replace(/\./g, "")
+      .replace(",", ".");
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+let linha = linhaBase;
 
   for (const r of registros) {
     // Para linhas além da primeira, copia a linha-base do template para manter fórmulas/estilos
     if (linha > linhaBase) {
-      const dest = sheet.range(`A${linha}:H${linha}`);
-      if (typeof rangeBase.copyTo === "function") {
-        // Algumas versões do xlsx-populate no browser não suportam copyTo()
-        rangeBase.copyTo(dest);
-      } else if (typeof rangeBase.copy === "function") {
-        // Outras versões suportam copy()
-        rangeBase.copy(dest);
-      } else {
-        // Fallback robusto: copia célula a célula (fórmula/valor + estilo)
-        for (let c = 1; c <= 8; c++) {
-          const baseCell = sheet.cell(linhaBase, c);
-          const newCell  = sheet.cell(linha, c);
-
-          try {
-            const f = baseCell.formula();
-            if (f) newCell.formula(f);
-            else newCell.value(baseCell.value());
-          } catch (e) {
-            // Se der erro na fórmula, copia só o valor
-            newCell.value(baseCell.value());
-          }
-
-          try {
-            newCell.style(baseCell.style());
-          } catch (e) {
-            // Algumas builds do browser podem limitar estilos; ignora se falhar
-          }
-        }
-      }
+      // Clona a linha-base (linha 6) com estilos e fórmulas ajustadas para a linha atual
+      cloneRowFromBase(sheet, linhaBase, linha);
     }
 
     // Preenche apenas os valores variáveis
-    sheet.cell(`B${linha}`).value(Number(r.bag));     // HC
-    sheet.cell(`C${linha}`).value(Number(r.bruto));   // PESO BRUTO
-    sheet.cell(`E${linha}`).value(Number(r.liquido)); // BAG + EMBALAGEM
+    const bagNum = Number(r.bag);
+    sheet.cell(`B${linha}`).value(Number.isFinite(bagNum) ? bagNum : null);     // HC
+    const brutoNum = parseDecimalBRExport(r.bruto);
+    sheet.cell(`C${linha}`).value(brutoNum === null ? null : brutoNum);   // PESO BRUTO
+    const liquidoNum = parseDecimalBRExport(r.liquido);
+    sheet.cell(`E${linha}`).value(liquidoNum === null ? null : liquidoNum); // BAG + EMBALAGEM
 
     linha++;
   }
