@@ -329,6 +329,7 @@ th {
             <select id="embalagem">
                 <option>67641311</option>
                 <option>67674704</option>
+				<option>96404704</option>
             </select>
         </div>
         <div class="group">
@@ -408,6 +409,7 @@ th {
             <option value="">Selecione...</option>
             <option value="67674704">67674704</option>
             <option value="67641311">67641311</option>
+			<option value="96404704">96404704</option>
           </select>
         </div>
       </div>
@@ -760,11 +762,24 @@ document.addEventListener("keydown", (e) => {
 window.exportarExcel = () => abrirModalExport();
 
 async function gerarExcelComFiltros(dataFiltro, loteFiltro, embalagem) {
-  let codigoEmbalagem = "";
-  if (embalagem === "67674704") codigoEmbalagem = "#4704";
-  else if (embalagem === "67641311") codigoEmbalagem = "#1311";
-  else throw new Error("Modelo de embalagem inválido.");
+let codigoEmbalagem = "";
+let codigoMaterial = "";
 
+if (embalagem === "67674704") {
+  codigoEmbalagem = "#4704";
+  codigoMaterial = "50737403";
+} 
+else if (embalagem === "67641311") {
+  codigoEmbalagem = "#1311";
+  codigoMaterial = "50825434";
+} 
+else if (embalagem === "96404704") {
+  codigoEmbalagem = "#4704C"; // 👈 NOVO
+  codigoMaterial = "50872959"; // 👈 NOVO
+} 
+else {
+  throw new Error("Modelo de embalagem inválido.");
+}
   // Busca no Firestore (data + lote)
   const q = query(
     pesagensRef,
@@ -814,6 +829,7 @@ async function gerarExcelComFiltros(dataFiltro, loteFiltro, embalagem) {
 
   // EMBALAG. (#4704 / #1311)
   sheet.cell("G3").value(codigoEmbalagem);
+  sheet.cell("A5").value(codigoMaterial);
 
   // Linha base do template (onde já existem fórmulas/formatos)
   
